@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerAi</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #1c1c1e;
+            color: #f5f5f7;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            position: relative;
+            transition: box-shadow 0.3s ease-in-out;
+        }
+        body.listening {
+            box-shadow: 0 0 30px 20px rgba(10, 132, 255, 0.7);
+        }
+        .container {
+            text-align: center;
+            background-color: #2c2c2e;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 600px;
+        }
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        .button {
+            background-color: #0a84ff;
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 12px;
+            cursor: pointer;
+            margin: 15px 10px;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background-color: #007aff;
+        }
+        #consoleButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #0a84ff;
+            border: none;
+            color: white;
+            padding: 10px;
+            font-size: 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #consoleButton:hover {
+            background-color: #007aff;
+        }
+        #console {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 200px;
+            background-color: #333;
+            color: #fff;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow-y: scroll;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PowerAi</h1>
+        <p id="status">Press the button and speak...</p>
+        <button class="button" onclick="handleButtonPress()">Start Listening</button>
+        <button id="consoleButton" onclick="toggleConsole()">Show Console</button>
+    </div>
+    <div id="console"></div>
+    <script>
+        const statusElement = document.getElementById('status');
+        const consoleElement = document.getElementById('console');
+        const synth = window.speechSynthesis;
+        let recognition;
+        let isListening = false;
+
+        try {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+
+                recognition.onstart = () => {
+                    logToConsole('Recognition started');
+                    document.body.classList.add('listening');
+                    statusElement.textContent = "Listening...";
+                };
+
+                recognition.onresult = (event) => {
+                    const speechResult = event.results[0][0].transcript.toLowerCase();
+                    logToConsole('Recognition result:', speechResult);
+                    statusElement.textContent = `You said: ${speechResult}`;
+                    handleSpeech(speechResult);
+                };
+
+                recognition.onerror = (event) => {
+                    logToConsole('Recognition error:', event.error);
+                    statusElement.textContent = `Error occurred in recognition: ${event.error}`;
+                };
+
+                recognition.onend = () => {
+                    logToConsole('Recognition ended');
+                    document.body.classList.remove('listening');
+                    statusElement.textContent = "Press the button and speak...";
+                };
+            } else {
+                throw new Error('SpeechRecognition API not supported in this browser.');
+            }
+        } catch (error) {
+            logToConsole(error.message);
+            statusElement.textContent = error.message;
+        }
+
+        function handleButtonPress() {
+            if (recognition) {
+                logToConsole('Button pressed');
+                if (!isListening) {
+                    logToConsole('Starting recognition for the first time');
+                    isListening = true;
+                    speak('Go ahead, say something.');
+                    startRecognition();
+                } else {
+                    logToConsole('Starting recognition again');
+                    speak('I\'m all ears.');
+                    startRecognition();
+                }
+            } else {
+                logToConsole('SpeechRecognition API not supported in this browser.');
+            }
+        }
+
+        function startRecognition() {
+            try {
+                recognition.start();
+            } catch (error) {
+                logToConsole('Error starting recognition:', error);
+            }
+        }
+
+        function speak(text) {
+            logToConsole('Speaking text:', text);
+            fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key=YOUR_API_KEY', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    input: { text: text },
+                    voice: { languageCode: 'en-US', name: 'en-US-Wavenet-F' },
+                    audioConfig: { audioEncoding: 'MP3' },
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                const audio = new Audio('data:audio/mp3;base64,' + data.audioContent);
+                audio.play();
+            })
+            .catch(error => {
+                logToConsole('Error:', error);
+            });
+        }
+
+        function handleSpeech(speech) {
+            logToConsole('Handling speech:', speech);
+            if (speech.includes('search for')) {
+                const query = speech.replace('search for', '').trim();
+                speak(`Searching for ${query}`);
+                window.open(`https://www.google.com/search?q=${query}`, '_blank');
+            } else if (speech.includes('what is your name')) {
+                speak("My name is PowerAi.");
+            } else if (speech.includes('tell me a joke')) {
+                const jokes = [
+                    "Why don't scientists trust atoms? Because they make up everything!",
+                    "Why did the scarecrow win an award? Because he was outstanding in his field!",
+                    "Why don't skeletons fight each other? They don't have the guts."
+                ];
+                const joke = jokes[Math.floor(Math.random() * jokes.length)];
+                speak(joke);
+            } else {
+                speak("Sorry, I didn't understand that. Please try again.");
+            }
+        }
+
+        function logToConsole(...messages) {
+            consoleElement.innerHTML += messages.join(' ') + '<br>';
+            consoleElement.scrollTop = consoleElement.scrollHeight;
+        }
+
+        function toggleConsole() {
+            if (consoleElement.style.display === 'none' || consoleElement.style.display === '') {
+                consoleElement.style.display = 'block';
+                document.getElementById('consoleButton').textContent = 'Hide Console';
+            } else {
+                consoleElement.style.display = 'none';
+                document.getElementById('consoleButton').textContent = 'Show Console';
+            }
+        }
+    </script>
+</body>
+</html>
